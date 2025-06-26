@@ -1,0 +1,140 @@
+name: 🚀 Auto Publisher - YouTube Upload Pipeline
+
+on:
+  # Execução manual
+  workflow_dispatch:
+    inputs:
+      sync_drive:
+        description: 'Sincronizar novos vídeos do Drive?'
+        required: true
+        default: 'true'
+        type: boolean
+      max_videos:
+        description: 'Máximo de vídeos para processar'
+        required: true
+        default: '1'
+        type: string
+      dry_run:
+        description: 'Modo preview (não fazer upload real)?'
+        required: false
+        default: false
+        type: boolean
+  
+  # Execução automática (opcional)
+  schedule:
+    - cron: '0 10 * * *'  # Todo dia às 10h UTC (7h Brasília)
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  auto-publisher:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 🔧 Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: 🟢 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: 📦 Install Dependencies
+      run: |
+        echo "📦 Instalando dependências..."
+        npm install
+        echo "✅ Dependências instaladas"
+        
+    - name: 🔐 Setup Environment Variables
+      run: |
+        echo "🔐 Configurando variáveis de ambiente..."
+        echo "NOTION_TOKEN=${{ secrets.NOTION_TOKEN }}" >> .env
+        echo "NOTION_DATABASE_ID=${{ secrets.NOTION_DATABASE_ID }}" >> .env
+        echo "GOOGLE_DRIVE_FOLDER_ID=${{ secrets.GOOGLE_DRIVE_FOLDER_ID }}" >> .env
+        echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+        echo "GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}" >> .env
+        echo "GOOGLE_REFRESH_TOKEN=${{ secrets.GOOGLE_REFRESH_TOKEN }}" >> .env
+        echo "YOUTUBE_CLIENT_ID=${{ secrets.YOUTUBE_CLIENT_ID }}" >> .env
+        echo "YOUTUBE_CLIENT_SECRET=${{ secrets.YOUTUBE_CLIENT_SECRET }}" >> .env
+        echo "YOUTUBE_REFRESH_TOKEN=${{ secrets.YOUTUBE_REFRESH_TOKEN }}" >> .env
+        echo "✅ Variáveis configuradas"
+        
+    - name: 🔄 Sync Google Drive (Opcional)
+      if: ${{ github.event.inputs.sync_drive == 'true' || github.event_name == 'schedule' }}
+      run: |
+        echo "🔄 Sincronizando vídeos do Google Drive..."
+        if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          node 5syncgdrive.js --preview --limit=${{ github.event.inputs.max_videos || '1' }}
+        else
+          node 5syncgdrive.js --limit=${{ github.event.inputs.max_videos || '1' }}
+        fi
+        echo "✅ Sincronização concluída"
+        
+    - name: 📋 Fetch Pending Videos
+      id: fetch_videos
+      run: |
+        echo "📋 Buscando vídeos pendentes..."
+        node 1fetchvideos.js | tee fetch_output.txt
+        
+        # Extrair page_id do output
+        PAGE_ID=$(grep -oP '📄 ID da página: \K[a-f0-9-]+' fetch_output.txt | head -1)
+        
+        if [ -z "$PAGE_ID" ]; then
+          echo "📭 Nenhum vídeo pendente encontrado"
+          echo "has_video=false" >> $GITHUB_OUTPUT
+        else
+          echo "🎯 Vídeo encontrado: $PAGE_ID"
+          echo "has_video=true" >> $GITHUB_OUTPUT
+          echo "page_id=$PAGE_ID" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: 📥 Download Video
+      if: steps.fetch_videos.outputs.has_video == 'true'
+      run: |
+        echo "📥 Fazendo download do vídeo..."
+        PAGE_ID="${{ steps.fetch_videos.outputs.page_id }}"
+        node 2downloadvideo.js "$PAGE_ID"
+        echo "✅ Download concluído"
+        
+    - name: 📤 Upload to YouTube
+      if: steps.fetch_videos.outputs.has_video == 'true' && github.event.inputs.dry_run != 'true'
+      run: |
+        echo "📤 Enviando para o YouTube..."
+        PAGE_ID="${{ steps.fetch_videos.outputs.page_id }}"
+        node 3uploadyoutube.js "$PAGE_ID"
+        echo "✅ Upload concluído"
+        
+    - name: 🎭 Dry Run Preview
+      if: steps.fetch_videos.outputs.has_video == 'true' && github.event.inputs.dry_run == 'true'
+      run: |
+        echo "🎭 MODO PREVIEW - Upload não será realizado"
+        echo "📄 Page ID: ${{ steps.fetch_videos.outputs.page_id }}"
+        echo "🎬 Vídeo seria enviado para o YouTube"
+        
+    - name: 🧹 Cleanup Temporary Files
+      if: always()
+      run: |
+        echo "🧹 Limpando arquivos temporários..."
+        rm -rf temp/
+        rm -f fetch_output.txt
+        rm -f .env
+        echo "✅ Limpeza concluída"
+        
+    - name: 📊 Summary
+      if: always()
+      run: |
+        echo "📊 RESUMO DA EXECUÇÃO"
+        echo "========================"
+        if [ "${{ steps.fetch_videos.outputs.has_video }}" = "true" ]; then
+          echo "✅ Vídeo processado: ${{ steps.fetch_videos.outputs.page_id }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "🎭 Modo preview - Nenhum upload real foi feito"
+          else
+            echo "📤 Upload realizado com sucesso"
+          fi
+        else
+          echo "📭 Nenhum vídeo pendente encontrado"
+        fi
+        echo "========================"

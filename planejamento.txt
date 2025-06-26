@@ -1,0 +1,93 @@
+📁 ESTRUTURA DO AUTO_PUBLISHER - Explicação Completa:
+🎯 ARQUIVOS PRINCIPAIS:
+
+index.js - SERVIDOR PRINCIPAL
+
+Roda o Express na porta 3333
+Recebe chamadas do GitHub Actions às 14h
+Orquestra todos os outros scripts em sequência
+Endpoints: /upload-video, /health, /status
+
+package.json - CONFIGURAÇÕES DO PROJETO
+
+Dependências: express, notion, googleapis, etc.
+Scripts para rodar o projeto
+Informações básicas do projeto
+
+.env - VARIÁVEIS SECRETAS
+
+Tokens do Notion, Google, YouTube
+IDs dos bancos de dados
+Senhas e chaves de API
+🔢 SCRIPTS NUMERADOS (executam em ordem):
+
+1_fetch_videos.js - BUSCAR VÍDEO NO NOTION
+
+Conecta no banco "auto publisher"
+Procura por vídeos com status "Pending"
+Retorna: título, descrição, link do Drive, tags
+Se não achar nada, para por aqui
+
+2_download_video.js - BAIXAR DO GOOGLE DRIVE
+
+Pega o link do Drive do vídeo encontrado 
+pasta drive https://drive.google.com/drive/u/0/folders/1FAJJgqe1xIfDQEIgly-E8SkaP22XqRul
+Baixa o arquivo MP4 para pasta temporária
+Valida se o download foi bem-sucedido
+Retorna: caminho do arquivo local
+
+3_upload_youtube.js - ENVIAR PARA YOUTUBE
+
+Pega o vídeo baixado
+Usa os metadados do Notion (título, descrição, tags)
+Faz upload usando YouTube API
+Retorna: URL do vídeo no YouTube
+
+4_update_notion.js - ATUALIZAR STATUS
+
+Marca o vídeo como "Uploaded" no Notion
+Adiciona a URL do YouTube
+Adiciona data/hora do upload
+Limpa arquivos temporários
+🛠️ PASTA UTILS (ferramentas auxiliares):
+
+google-auth.js - AUTENTICAÇÃO GOOGLE
+
+Configura OAuth2 para YouTube + Drive
+Gerencia tokens de acesso
+Usado pelos scripts 2 e 3
+
+drive-downloader.js - BAIXAR DO DRIVE
+
+Funções específicas para Google Drive API
+Extrai ID do arquivo da URL
+Gerencia download de arquivos grandes
+
+youtube-uploader.js - UPLOAD YOUTUBE
+
+Funções específicas para YouTube API
+Configura metadados do vídeo
+Gerencia upload com retry
+🤖 ARQUIVO TEMPORÁRIO:
+
+7.get-refresh-token.js - CONFIGURAÇÃO INICIAL
+
+SÓ USAR UMA VEZ para configurar
+Gera o refresh token do Google
+Depois pode deletar
+⚡ FLUXO COMPLETO:
+
+14:00 → GitHub Actions chama index.js
+
+   → index.js chama 1_fetch_videos.js
+   → Se achou vídeo: chama 2_download_video.js  
+   → Se baixou: chama 3_upload_youtube.js
+   → Se enviou: chama 4_update_notion.js
+   → Fim! ✅
+
+🎯 RESUMO:
+index.js = cérebro que coordena tudo
+Scripts 1-4 = fazem o trabalho pesado em sequência
+utils/ = ferramentas que os scripts usam
+1 vídeo por dia automaticamente às 14h
+
