@@ -1,13 +1,12 @@
 name: 🚀 Auto Publisher - YouTube Upload Pipeline
 
 on:
-  # Execução manual
   workflow_dispatch:
     inputs:
       sync_drive:
         description: 'Sincronizar novos vídeos do Drive?'
         required: true
-        default: 'true'
+        default: true
         type: boolean
       max_videos:
         description: 'Máximo de vídeos para processar'
@@ -19,10 +18,11 @@ on:
         required: false
         default: false
         type: boolean
-  
-  # Execução automática (opcional)
   schedule:
-    - cron: '0 10 * * *'  # Todo dia às 10h UTC (7h Brasília)
+    - cron: '0 10 * * *' # Todo dia às 7h Brasília
+    - cron: '0 13 * * *' # Todo dia às 10h Brasília
+    - cron: '0 16 * * *' # Todo dia às 13h Brasília
+    - cron: '0 19 * * *' # Todo dia às 16h Brasília
 
 env:
   NODE_VERSION: '18'
