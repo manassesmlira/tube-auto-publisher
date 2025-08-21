@@ -19,9 +19,6 @@ on:
         default: false
         type: boolean
   schedule:
-    - cron: '0 10 * * *' # Todo dia às 7h Brasília
-    - cron: '0 13 * * *' # Todo dia às 10h Brasília
-    - cron: '0 16 * * *' # Todo dia às 13h Brasília
     - cron: '0 19 * * *' # Todo dia às 16h Brasília
 
 env:
